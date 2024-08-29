@@ -1,0 +1,11 @@
+.DS_STORE
+.vscode/
+
+
+javarel/server/src/main/resources/db/dockercompose_DEV.yaml
+javarel/server/src/main/resources/local_db_image/data/
+javarel/server/target
+
+
+*.class
+application.properties

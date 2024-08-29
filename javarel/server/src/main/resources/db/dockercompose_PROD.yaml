@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  pg:
+    image: postgres:12.19-bullseye
+    environment:
+      POSTGRES_DB: ""
+      POSTGRES_USER: ""
+      POSTGRES_PASSWORD: ""
+    ports:
+      - "5432:5432"
+    volumes:
+      - "./data:/var/lib/postgresql/data"
+      - ./db.sql:/docker-entrypoint-initdb.d/db.sql
+
+volumes:
+  data:

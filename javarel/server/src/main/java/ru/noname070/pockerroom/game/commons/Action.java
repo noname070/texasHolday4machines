@@ -1,4 +1,4 @@
-package ru.noname070.pockerroom.game.cards;
+package ru.noname070.pockerroom.game.commons;
 
 public enum Action {
     BET,
@@ -8,5 +8,11 @@ public enum Action {
     RAISE,
     WIN,
     LOOSE,
-    SIDEPOT
+    SIDEPOT,
+    ALL_IN,
+
+    // ====
+    GAME_START, YOUR_TURN,
+    INFO, REQUEST,
+    OK, ERR
 }

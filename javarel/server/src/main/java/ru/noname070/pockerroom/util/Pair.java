@@ -1,4 +1,4 @@
-package ru.noname070.pockerroom.game.util;
+package ru.noname070.pockerroom.util;
 
 public class Pair<R, S> {
     private R p1;

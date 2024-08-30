@@ -1,4 +1,4 @@
-package ru.noname070.pockerroom.game.cards;
+package ru.noname070.pockerroom.game.commons;
 
 public enum Suit {
     HEART,  // ♥

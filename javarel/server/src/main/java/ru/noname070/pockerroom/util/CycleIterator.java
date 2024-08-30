@@ -1,7 +1,8 @@
-package ru.noname070.pockerroom.game.util;
+package ru.noname070.pockerroom.util;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -14,6 +15,11 @@ public class CycleIterator<R> implements Iterator<R> {
     public CycleIterator(R...names) {
         this.names = new ArrayList<R>();
         this.names.addAll(Arrays.asList(names));
+    }
+
+    public CycleIterator(Collection<R> names) {
+        this.names = new ArrayList<R>();
+        this.names.addAll(names);
     }
 
     @Override

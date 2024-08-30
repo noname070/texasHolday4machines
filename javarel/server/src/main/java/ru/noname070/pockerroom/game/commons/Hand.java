@@ -1,9 +1,9 @@
-package ru.noname070.pockerroom.game.cards;
+package ru.noname070.pockerroom.game.commons;
 
 import java.util.Arrays;
 import java.util.List;
 
-import ru.noname070.pockerroom.game.util.Pair;
+import ru.noname070.pockerroom.util.Pair;
 
 public class Hand {
     private final Card c1;

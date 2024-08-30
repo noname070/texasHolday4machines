@@ -5,6 +5,7 @@ import java.util.Scanner;
 import org.glassfish.tyrus.server.Server;
 
 import ru.noname070.pockerroom.db.DBHandler;
+import ru.noname070.pockerroom.server.PockerServer;
 
 public class Main {
     public static void main(String[] args) {

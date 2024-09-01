@@ -4,9 +4,7 @@ import ru.noname070.pockerroom.db.DBHandler;
 import ru.noname070.pockerroom.game.Player;
 import ru.noname070.pockerroom.game.TexasHolday;
 import ru.noname070.pockerroom.game.commons.Action;
-import ru.noname070.pockerroom.server.messages.IMessage;
-import ru.noname070.pockerroom.server.messages.InfoMessage;
-import ru.noname070.pockerroom.server.messages.StateMessage;
+import ru.noname070.pockerroom.server.util.Request;
 import ru.noname070.pockerroom.util.CycleIterator;
 import ru.noname070.pockerroom.util.Pair;
 
@@ -90,9 +88,11 @@ public class PockerServer {
 
         if (player != null) {
             handleGameAction(session, message);
-            sendMessage(session, new InfoMessage(Action.OK));
         } else {
-            sendMessage(session, new InfoMessage(Action.ERR));
+            session.getAsyncRemote().sendText(Request.builder()
+                    .type("err") // TODO
+                    .error("smthng went wrong")
+                    .build().toJson());
         }
     }
 
@@ -133,7 +133,11 @@ public class PockerServer {
                 .orElse(null);
 
         if (p == null) {
-            sendMessage(session, new InfoMessage(Action.ERR));
+            log.log(null, "Err: handled unauthorized player session");
+            session.getAsyncRemote().sendText(Request.builder()
+                    .type("err") // TODO
+                    .error("smthng went wrong")
+                    .build().toJson());
             return;
         }
 
@@ -142,7 +146,11 @@ public class PockerServer {
         try {
             action = Action.valueOf(parts[0].toUpperCase());
         } catch (IllegalArgumentException e) {
-            sendMessage(session, new InfoMessage(Action.ERR));
+            log.log(null, "Err: ", e);
+            session.getAsyncRemote().sendText(Request.builder()
+                    .type("err") // TODO
+                    .error("smthng went wrong")
+                    .build().toJson());
             return;
         }
 
@@ -152,7 +160,11 @@ public class PockerServer {
                 try {
                     amount = Integer.parseInt(parts[1]);
                 } catch (NumberFormatException e) {
-                    sendMessage(session, new InfoMessage(Action.ERR));
+                    log.log(null, "Err: ", e);
+                    session.getAsyncRemote().sendText(Request.builder()
+                            .type("err") // TODO
+                            .error("smthng went wrong")
+                            .build().toJson());
                     return;
                 }
                 game.placeBet(p, amount);
@@ -164,7 +176,11 @@ public class PockerServer {
                 try {
                     amount = Integer.parseInt(parts[1]);
                 } catch (NumberFormatException e) {
-                    sendMessage(session, new InfoMessage(Action.ERR));
+                    log.log(null, "Err: ", e);
+                    session.getAsyncRemote().sendText(Request.builder()
+                            .type("err") // TODO
+                            .error("smthng went wrong")
+                            .build().toJson());
                     return;
                 }
                 game.raise(p, amount);
@@ -178,26 +194,21 @@ public class PockerServer {
             case ALL_IN: {
                 game.allIn(p);
             }
-
             default:
-                broadcast(new StateMessage(game.getPublicState()));
+                break;
         }
         Player nextPlayer = playerIterator.next();
-        sendMessage(nextPlayer.getSession(), new InfoMessage(Action.YOUR_TURN));
 
-    }
-
-    private void broadcast(IMessage message) {
-        sessions.forEach(session -> sendMessage(session, message));
-    }
-
-    private void sendMessage(Session session, IMessage message) {
-        session.getAsyncRemote().sendText(message.build());
     }
 
     private void startGame() {
         game = new TexasHolday(players.values().toArray(new Player[0]));
-        broadcast(new InfoMessage(Action.GAME_START));
+
+        game.broadcast(Request.builder()
+                .type("action")
+                .action("GAME_START")
+                .build());
+
         game.newGame();
     }
 }

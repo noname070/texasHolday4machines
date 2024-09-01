@@ -10,9 +10,9 @@ public class CycleIterator<R> implements Iterator<R> {
 
     private List<R> names;
     private int conunt = 0;
-    
+
     @SuppressWarnings("unchecked") // да похуй
-    public CycleIterator(R...names) {
+    public CycleIterator(R... names) {
         this.names = new ArrayList<R>();
         this.names.addAll(Arrays.asList(names));
     }

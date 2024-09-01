@@ -2,6 +2,8 @@
 .vscode/
 
 
+javarel/server/src/main/resources/dbregusers.sh
+javarel/server/src/main/resources/db/data
 javarel/server/src/main/resources/db/dockercompose_DEV.yaml
 javarel/server/src/main/resources/local_db_image/data/
 javarel/server/target

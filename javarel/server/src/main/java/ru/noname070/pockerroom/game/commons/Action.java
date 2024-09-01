@@ -6,13 +6,6 @@ public enum Action {
     CHECK,
     FOLD,
     RAISE,
-    WIN,
-    LOOSE,
     SIDEPOT,
     ALL_IN,
-
-    // ====
-    GAME_START, YOUR_TURN,
-    INFO, REQUEST,
-    OK, ERR
 }

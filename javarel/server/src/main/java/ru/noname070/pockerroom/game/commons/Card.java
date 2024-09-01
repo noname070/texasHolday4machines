@@ -40,7 +40,7 @@ public class Card implements Comparable<Card> {
 
     @Override
     public String toString() {
-        return String.format("[%s %s]", this.rank.name(), this.suit.name());
+        return String.format("%s %s", this.rank.name(), this.suit.name());
     }
 
     @Override

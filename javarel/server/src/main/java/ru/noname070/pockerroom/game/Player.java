@@ -2,34 +2,27 @@ package ru.noname070.pockerroom.game;
 
 import ru.noname070.pockerroom.Config;
 import ru.noname070.pockerroom.game.commons.*;
+import ru.noname070.pockerroom.server.util.Request;
 import ru.noname070.pockerroom.util.Pair;
 
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-import javax.websocket.MessageHandler;
 import javax.websocket.Session;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 import lombok.Getter;
 
 @Getter
 
 public class Player {
-    private static final Gson gson = new GsonBuilder().create();
+    // private static final Gson gson = new GsonBuilder().create();
     private final String name;
     private final String token;
     private final Session session;
-    private boolean folded = false;
+    @Getter private boolean folded = false;
     private int capital = Config.START_CAPITAL;
     private Hand hand;
 
@@ -43,46 +36,9 @@ public class Player {
         this.hand = new Hand(c1, c2);
     }
 
-    public Pair<Card, Card> getCards() {
-        return this.hand.getCards();
-    }
-
-    public void sendMessage(Action type, Map<String, Object> data) {
-        try {
-            session.getBasicRemote().sendText(gson.toJson(new HashMap<>() {
-                {
-                    put("type", type.name());
-                    put("data", data);
-                }
-            }));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void sendMessage(Action type, String data) {
-        try {
-            session.getBasicRemote().sendText(gson.toJson(new HashMap<>() {
-                {
-                    put("type", type.name());
-                    put("data", data);
-                }
-            }));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void sendMessage(Action type) {
-        try {
-            session.getBasicRemote().sendText(gson.toJson(new HashMap<>() {
-                {
-                    put("type", type.name());
-                }
-            }));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public List<Card> getCards() {
+        Pair<Card, Card> cards = this.hand.getCards();
+        return Arrays.asList(cards.getFirst(), cards.getSecond());
     }
 
     public void fold() {
@@ -129,79 +85,28 @@ public class Player {
     public void call(int amount) {
         if (capital >= amount) {
             capital -= amount;
-            sendMessage(Action.CALL);
+
         } else {
-            sendMessage(Action.ERR);
+            sendMessage(Request.builder()
+                    .type("error")
+                    .error("no miandiw")
+
+                    .build());
         }
     }
 
-    public Action requestAction(String defaultAction, int amountToCall) {
-        sendMessage(Action.REQUEST, new HashMap<>() {{
-            put("amount", amountToCall);
-            put("player", name);
-        }});
-    
-        final Action[] action = new Action[1];
-        final CountDownLatch latch = new CountDownLatch(1);
-    
-        session.addMessageHandler(new MessageHandler.Whole<String>() {
-            @Override
-            public void onMessage(String message) {
-                try {
-                    @SuppressWarnings("unchecked") // gson base
-                    Map<String, String> response = gson.fromJson(message, Map.class);
-                    action[0] = Action.valueOf(((String) response.get("type")).trim().toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    sendMessage(Action.ERR, Collections.singletonMap("message", "Invalid action. Please choose CALL, RAISE, or FOLD."));
-                } finally {
-                    latch.countDown();
-                }
-            }
-        });
-    
-        try {
-            latch.await(Config.PLAYER_TIMEOUT, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    
-        return action[0] != null ? action[0] : Action.FOLD;
-    }
-    
-
-    public int requestCallAmount() {
-        sendMessage(Action.CALL);
-
-        final int[] raiseAmount = new int[1];
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        session.addMessageHandler(new MessageHandler.Whole<String>() {
-            @Override
-            public void onMessage(String message) {
-                try {
-                    raiseAmount[0] = Integer.parseInt(message.trim());
-                } catch (NumberFormatException e) {
-                    sendMessage(Action.ERR);
-                } finally {
-                    latch.countDown();
-                }
-            }
-        });
-
-        try {
-            latch.await(Config.PLAYER_TIMEOUT, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        return raiseAmount[0];
+    public void sendMessage(Request r) {
+        r.send(session);
     }
 
     public int decreaseCapital(int amount) {
         if (amount <= capital) {
             return capital -= amount;
         } else {
-            sendMessage(Action.ERR);
+            sendMessage(Request.builder()
+                    .type("error")
+                    .error("") // TODO
+                    .build());
             return 0;
         }
     }

@@ -1,16 +1,19 @@
 package ru.noname070.pockerroom.game;
 
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import javax.websocket.SendHandler;
+import javax.websocket.SendResult;
 
 import lombok.Getter;
 import lombok.extern.java.Log;
 import ru.noname070.pockerroom.Config;
 import ru.noname070.pockerroom.game.commons.*;
+import ru.noname070.pockerroom.server.util.Request;
 import ru.noname070.pockerroom.util.CycleIterator;
+import ru.noname070.pockerroom.util.Pair;
 
 @Log
 public class TexasHolday {
@@ -21,9 +24,10 @@ public class TexasHolday {
     private final List<Card> board;
     private Map<Player, Integer> bets;
     private Iterator<Card> deck;
-    private int maxbet;
+    private int maxbet = 0;
+    private int bank = 0;
 
-    private final Gson gson = new GsonBuilder().create();
+    // private final Gson gson = new GsonBuilder().create();
 
     public TexasHolday(Player... players) {
         this.players = Arrays.asList(players);
@@ -36,11 +40,6 @@ public class TexasHolday {
     }
 
     public Map<String, Object> getPublicState() {
-        Map<String, Object> state = new HashMap<>();
-
-        state.put("boardCards", board.stream()
-                .map(Card::toString)
-                .collect(Collectors.joining(";")));
 
         Map<String, Object> playerStates = new HashMap<>();
         for (Player player : players) {
@@ -48,24 +47,24 @@ public class TexasHolday {
             playerState.put("currentBet", bets.getOrDefault(player, 0));
             playerState.put("remainingCapital", player.getCapital());
             playerState.put("isFolded", player.isFolded());
+
             playerStates.put(player.getName(), playerState);
         }
-        state.put("players", playerStates);
-        state.put("maxBet", maxbet);
 
-        return state;
+        playerStates.put("maxBet", maxbet);
+
+        return playerStates;
     }
 
     public void newGame() {
         this.deck = Card.newDeck().iterator();
+
         for (Player p : this.players) {
             p.reciveCards(deck.next(), deck.next());
-            // p.sen("Your cards: " + p.getHand().asList().toString());
-            p.sendMessage(Action.INFO, new HashMap<>() {
-                {
-                    put("personalCards", p.getHand().asList());
-                }
-            });
+            p.sendMessage(Request.builder()
+                    .type("INFO")
+                    .cards(p.getCards())
+                    .build());
         }
 
         Player dealer = dealers.next();
@@ -109,7 +108,14 @@ public class TexasHolday {
             log.info("%s : %s\n".formatted(p.getName(), p.getHand().asList()));
         });
 
-        winners.get(0).sendMessage(Action.WIN);
+        broadcast(Request.builder()
+                .type("INFO")
+                .winner(winners.get(0).getName())
+                .boardCards(board)
+                .playerStates(getPublicState())
+                .bank(maxbet)
+                // блять а как с сайд потом ебаться пупуп
+                .build());
     }
 
     /**
@@ -119,6 +125,30 @@ public class TexasHolday {
         for (int i = 0; i < n; i++) {
             this.board.add(this.deck.next());
         }
+    }
+
+    private Pair<Action, Integer> requestAction(Player p, Request r) {
+        Action act = Action.CHECK;
+        int bet = 0;
+        p.getSession().getAsyncRemote().sendText(
+                r.toJson(),
+                new SendHandler() {
+
+                    @Override
+                    public void onResult(SendResult result) {
+                        // ret = Action.valueOf(result);
+                        /**
+                         * TODO кароче не ебу
+                         * сюда надо воткнуть хендлер что бы сразу получить ответ
+                         * от игрока.
+                         * 
+                         * как сделать - 0 идей.
+                         */
+                    }
+
+                });
+
+        return new Pair<>(act, bet);
     }
 
     /**
@@ -134,31 +164,44 @@ public class TexasHolday {
 
         boolean allBetsMatched = false;
         while (!allBetsMatched) {
-            allBetsMatched = true;
             for (Player p : this.players) {
                 if (p.isFolded())
                     continue;
                 if (bets.get(p) != maxbet) {
                     int amountToCall = maxbet - bets.get(p);
-                    Action action = p.requestAction("CALL", amountToCall);
-                    switch (action) {
+                    Pair<Action, Integer> actionNdbet = requestAction(p,
+                            Request.builder()
+                                    .type("request")
+                                    .boardCards(board)
+                                    .cards(p.getCards())
+                                    .bank(this.bank)
+                                    .playerStates(getPublicState())
+                                    // .sidePod(0)
+                                    .amount(amountToCall)
+                                    .build());
+
+                    switch (actionNdbet.getFirst()) {
                         case CALL:
                             if (p.getCapital() >= amountToCall) {
                                 bets.put(p, maxbet);
                                 p.decreaseCapital(amountToCall);
                             } else {
-                                p.sendMessage(Action.ERR);
+                                p.sendMessage(Request.builder()
+                                        .error("oops no money  (( ( (( u got  folded ")
+                                        .build());
                                 p.fold();
                             }
                             break;
                         case RAISE:
-                            int raiseAmount = p.requestCallAmount();
+                            int raiseAmount = actionNdbet.getSecond();
                             if (p.getCapital() >= raiseAmount + amountToCall) {
                                 maxbet += raiseAmount;
                                 bets.put(p, maxbet);
                                 p.decreaseCapital(amountToCall + raiseAmount);
                             } else {
-                                p.sendMessage(Action.ERR);
+                                p.sendMessage(Request.builder()
+                                        .error("oops no money  (( ( (( u got  folded ")
+                                        .build());
                                 p.fold();
                             }
                             break;
@@ -166,11 +209,29 @@ public class TexasHolday {
                             p.fold();
                             break;
                         default:
-                            p.sendMessage(Action.ERR);
+                            p.sendMessage(Request.builder()
+                                    .error("idk what r u means")
+                                    .build());
                             p.fold();
                     }
-                    allBetsMatched = false;
+
+                    allBetsMatched = bets.keySet().stream().allMatch(new Predicate<Player>() {
+                        @Override
+                        public boolean test(Player t) {
+                            return p.isFolded() && (bets.get(p) == maxbet);
+                        }
+                    });
                 }
+
+                p.sendMessage(Request.builder()
+                        .boardCards(board)
+                        .bank(bank)
+                        .cards(p.getCards())
+                        .playerStates(getPublicState())
+                        .build()
+
+                );
+                // TODO
             }
         }
     }
@@ -194,8 +255,8 @@ public class TexasHolday {
     /**
      * отправить всем игрокам сообщение
      */
-    private void broadcast(String message) {
-        this.players.forEach(p -> p.sendMessage(Action.INFO, message));
+    public void broadcast(Request r) {
+        this.players.forEach(p -> r.send(p.getSession()));
     }
 
     public void placeBet(Player player, int betAmount) {
@@ -204,15 +265,19 @@ public class TexasHolday {
             bets.put(player, betAmount);
             maxbet = Math.max(maxbet, betAmount);
 
-            broadcast(gson.toJson(new HashMap<>() {
-                {
-                    put("player", player.getName());
-                    put("action", Action.BET);
-                    put("amount", betAmount);
-                }
-            }));
+            broadcast(Request.builder()
+                    .type("info")
+                    .name(player.getName())
+                    .action(Action.BET.name())
+                    .boardCards(board)
+                    .bank(this.bank)
+                    .playerStates(getPublicState())
+                    .build());
         } else {
-            player.sendMessage(Action.ERR);
+            player.sendMessage(Request.builder()
+                    .type("err")
+                    .error("u cant bet pypyp") // TODO
+                    .build());
         }
     }
 
@@ -221,9 +286,20 @@ public class TexasHolday {
         if (player.getCapital() >= amountToCall) {
             player.decreaseCapital(amountToCall);
             bets.put(player, maxbet);
-            broadcast(String.format("%s called", player.getName()));
+
+            broadcast(Request.builder()
+                    .type("info")
+                    .name(player.getName())
+                    .action(Action.CALL.name())
+                    .boardCards(board)
+                    .bank(this.bank)
+                    .playerStates(getPublicState())
+                    .build());
         } else {
-            player.sendMessage(Action.ERR);
+            player.sendMessage(Request.builder()
+                    .type("err")
+                    .error("u cant bet pypyp") // TODO
+                    .build());
             player.fold();
         }
     }
@@ -234,33 +310,52 @@ public class TexasHolday {
             player.decreaseCapital(amountToCall + raiseAmount);
             maxbet += raiseAmount;
             bets.put(player, maxbet);
-            broadcast(gson.toJson(new HashMap<>() {
-                {
-                    put("player", player.getName());
-                    put("action", Action.RAISE);
-                    put("amount", maxbet);
-                }
-            }));
+
+            broadcast(Request.builder()
+                    .type("info")
+                    .name(player.getName())
+                    .action(Action.RAISE.name())
+                    .boardCards(board)
+                    .bank(this.bank)
+                    .playerStates(getPublicState())
+                    .build());
+
         } else {
-            player.sendMessage(Action.ERR);
+            player.sendMessage(Request.builder()
+                    .type("err")
+                    .error("u cant raise pypyp") // TODO
+                    .build());
             player.fold();
         }
     }
 
     public void fold(Player player) {
+        broadcast(Request.builder()
+                .type("info")
+                .name(player.getName())
+                .action(Action.FOLD.name())
+                .boardCards(board)
+                .bank(this.bank)
+                .playerStates(getPublicState())
+                .build());
         player.fold();
     }
 
     public void check(Player player) {
         if (bets.getOrDefault(player, 0) == maxbet) {
-            broadcast(gson.toJson(new HashMap<>() {
-                {
-                    put("player", player.getName());
-                    put("action", Action.CHECK);
-                }
-            }));
+            broadcast(Request.builder()
+                    .type("info")
+                    .name(player.getName())
+                    .action(Action.CHECK.name())
+                    .boardCards(board)
+                    .bank(this.bank)
+                    .playerStates(getPublicState())
+                    .build());
         } else {
-            player.sendMessage(Action.ERR);
+            player.sendMessage(Request.builder()
+                    .type("err")
+                    .error("u cant check pypyp") // TODO
+                    .build());
         }
     }
 
@@ -272,13 +367,15 @@ public class TexasHolday {
         bets.put(player, bets.getOrDefault(player, 0) + remainingCapital);
 
         maxbet = Math.max(maxbet, bets.get(player));
-        broadcast(gson.toJson(new HashMap<>() {
-            {
-                put("player", player.getName());
-                put("action", Action.ALL_IN);
-                put("amount", remainingCapital);
-            }
-        }));
+        broadcast(Request.builder()
+                .type("info")
+                .name(player.getName())
+                .action(Action.ALL_IN.name())
+                .boardCards(board)
+                .bank(this.bank)
+                // .sidePod() // TODO блять надо реально че то с ним придумать
+                .playerStates(getPublicState())
+                .build());
     }
 
 }

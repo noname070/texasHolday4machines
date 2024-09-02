@@ -6,6 +6,7 @@ import java.util.Map;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import lombok.Getter;
 import ru.noname070.pockerroom.game.commons.Card;
 
 public class Response {
@@ -13,6 +14,17 @@ public class Response {
             .registerTypeAdapter(Card.class, new CardTypeAdapter())
             .disableHtmlEscaping()
             .create();
+
+
+    @Getter private final String type;
+    @Getter private final Map<String, Object> data;
+
+    @SuppressWarnings("unchecked")
+    public Response(String raw) {
+        Map<String, Object> r = get(raw);
+        this.type = (String) r.getOrDefault("type", "err");
+        this.data = (Map<String, Object>) r.getOrDefault("data", null);
+    }
 
     // TODO какую нибудь штуку красивую что бы распаковывала все ключи
     // пупупупупупупупуу

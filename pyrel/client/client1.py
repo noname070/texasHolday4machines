@@ -1,73 +1,88 @@
-import requests
 import json
-import websockets
 import asyncio
+import websockets
 
 class PokerClient:
-    def __init__(self, server, name, token):
-        self.server = server
-        self.token = None
+    def __init__(self, base_url, name, token):
+        self.base_url = base_url
+        self.name = name
+        self.token = token
         self.session = None
+        self.handlers = {}
 
-    def register(self, username):
-        response = requests.post(f'{self.server}/', json={'name': username})
-        data = response.json()
-        self.token = data['token']
-        print(f"Registered as {username}, Token: {self.token}")
+    async def authenticate(self):
+        uri = f"ws://{self.base_url}/game?name={self.name}&token={self.token}"
+        self.session = await websockets.connect(uri)
+        print("Connected and authenticated")
 
-    def join_game(self, game_id):
-        response = requests.post(f'{self.base_url}/join', json={'token': self.token, 'game_id': game_id})
-        data = response.json()
-        print(f"Joined game {game_id}. Players: {data['players']}")
+        response = await self.session.recv()
+        if response != "OK":
+            print("Failed to authenticate")
+            self.session = None
+            return False
+        return True
 
-    def start_game(self):
-        response = requests.post(f'{self.base_url}/start', json={'token': self.token})
-        if response.status_code == 200:
-            print("Game started!")
-        else:
-            print(f"Error starting game: {response.text}")
+    async def send_message(self, message):
+        if self.session:
+            await self.session.send(message)
+            print(f"Sent: {message}")
 
-    def get_state(self):
-        response = requests.get(f'{self.base_url}/state', params={'token': self.token})
-        data = response.json()
-        print(f"Current game state: {json.dumps(data, indent=2)}")
+    async def handle_message(self, message):
+        try:
+            data = json.loads(message)
+            msg_type = data.get("type")
+            handler = self.handlers.get(msg_type)
+            if handler:
+                await handler(data)
+            else:
+                print(f"No handler for message type: {msg_type}")
+        except json.JSONDecodeError:
+            print("Error decoding JSON")
 
-    async def listen_for_updates(self):
-        async with websockets.connect(f'{self.base_url.replace("http", "ws")}/ws') as websocket:
-            await websocket.send(json.dumps({'token': self.token}))
-            while True:
-                update = await websocket.recv()
-                print(f"Update received: {update}")
+    async def listen(self):
+        async for message in self.session:
+            print(f"Received: {message}")
+            await self.handle_message(message)
 
-    def make_action(self, action, amount=None):
-        payload = {'token': self.token, 'action': action}
-        if amount is not None:
-            payload['amount'] = amount
-        response = requests.post(f'{self.base_url}/action', json=payload)
-        if response.status_code == 200:
-            print(f"Action {action} executed successfully.")
-        else:
-            print(f"Error executing action: {response.text}")
+    def register_handler(self, type):
+        def decorator(func):
+            self.handlers[type] = func
+            return func
+        return decorator
+
+    async def run(self):
+        if await self.authenticate():
+            await self.listen()
 
 
-# Пример использования
+async def main():
+    client = PokerClient(base_url='localhost:7777', name="TESTUSER1", token="rlnRwPviMpOW")
+
+    @client.register_handler(type="playerAction")
+    async def player_action_handler(data):
+        action = data.get("action")
+        amount = data.get("amount")
+        action_messages = {
+            "BET": f"Bet with amount {amount}",
+            "CALL": "Call",
+            "RAISE": f"Raise with amount {amount}",
+            "FOLD": "Fold",
+            "CHECK": "Check",
+            "ALL_IN": "All-in"
+        }
+        print(f"Player action: {action_messages.get(action, 'Unknown action')}")
+
+    @client.register_handler(type="gameInfo")
+    async def game_info_handler(data):
+        winner = data.get("winner")
+        board_cards = data.get("boardCards")
+        player_states = data.get("playerStates")
+        bank = data.get("bank")
+        side_pods = data.get("sidePods")
+        print(f"Game Info:\nWinner: {winner}\nBoard Cards: {board_cards}\nPlayer States: {player_states}\nBank: {bank}\nSide Pods: {side_pods}")
+
+    await client.run()
+
+
 if __name__ == "__main__":
-    client = PokerClient(base_url='http://localhost:8000')
-
-    # Зарегистрироваться как игрок
-    client.register("Player1")
-
-    # Присоединиться к игре
-    client.join_game(game_id=1)
-
-    # Начать игру
-    client.start_game()
-
-    # Запросить текущее состояние игры
-    client.get_state()
-
-    # Сделать действие (например, сделать ставку)
-    client.make_action('BET', amount=100)
-
-    # Асинхронно слушать обновления с сервера
-    asyncio.get_event_loop().run_until_complete(client.listen_for_updates())
+    asyncio.run(main())

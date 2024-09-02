@@ -38,6 +38,7 @@
             <type>pom</type>
         </dependency>
 
+
         <dependency>
             <groupId>javax.websocket</groupId>
             <artifactId>javax.websocket-api</artifactId>
@@ -45,12 +46,19 @@
             <scope>provided</scope>
         </dependency>
 
+
         <dependency>
             <groupId>org.glassfish.tyrus</groupId>
             <artifactId>tyrus-container-grizzly-server</artifactId>
             <version>1.13</version>
         </dependency>
 
+
+        <dependency>
+            <groupId>postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>9.0-801.jdbc4</version>
+        </dependency>
 
     </dependencies>
 </project>

@@ -10,6 +10,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import lombok.Builder;
+import ru.noname070.pockerroom.game.Player;
 import ru.noname070.pockerroom.game.commons.Card;
 
 @Builder
@@ -28,9 +29,9 @@ public class Request {
     private Integer amount;
     private String winner;
     private Integer bank;
-    private Integer sidePod;
     private String action;
     private Integer bankAmount;
+    private Map<Player, Integer> sidePods;
 
     public void send(Session session) {
         session.getAsyncRemote().sendText(toJson());
@@ -75,10 +76,6 @@ public class Request {
             data.put("bank", bank);
         }
 
-        if (this.sidePod != null) {
-            data.put("sidePod", sidePod);
-        }
-
         if (this.cards != null) {
             data.put("cards", cards);
         }
@@ -89,6 +86,10 @@ public class Request {
 
         if (this.bankAmount != null) {
             data.put("bankAmount", bankAmount);
+        }
+
+        if (this.sidePods != null) {
+            data.put("sidePods", sidePods);
         }
 
         return gson.toJson(new HashMap<>() {

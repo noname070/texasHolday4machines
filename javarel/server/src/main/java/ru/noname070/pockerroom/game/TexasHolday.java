@@ -2,27 +2,25 @@ package ru.noname070.pockerroom.game;
 
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
-
-import javax.websocket.SendHandler;
-import javax.websocket.SendResult;
 
 import lombok.Getter;
 import lombok.extern.java.Log;
 import ru.noname070.pockerroom.Config;
 import ru.noname070.pockerroom.game.commons.*;
 import ru.noname070.pockerroom.server.util.Request;
+import ru.noname070.pockerroom.server.util.Response;
 import ru.noname070.pockerroom.util.CycleIterator;
-import ru.noname070.pockerroom.util.Pair;
 
 @Log
 public class TexasHolday {
 
     private final List<Player> players;
     private final Iterator<Player> dealers;
-    @Getter
-    private final List<Card> board;
+    @Getter private final List<Card> board;
     private Map<Player, Integer> bets;
+    private Map<Player, Integer> sidePods = new HashMap<>();
     private Iterator<Card> deck;
     private int maxbet = 0;
     private int bank = 0;
@@ -42,13 +40,13 @@ public class TexasHolday {
     public Map<String, Object> getPublicState() {
 
         Map<String, Object> playerStates = new HashMap<>();
-        for (Player player : players) {
-            Map<String, Object> playerState = new HashMap<>();
-            playerState.put("currentBet", bets.getOrDefault(player, 0));
-            playerState.put("remainingCapital", player.getCapital());
-            playerState.put("isFolded", player.isFolded());
+        for (Player p : players) {
+            Map<String, Object> pState = new HashMap<>();
+            pState.put("currentBet", bets.getOrDefault(p, 0));
+            pState.put("remainingCapital", p.getCapital());
+            pState.put("isFolded", p.isFolded());
 
-            playerStates.put(player.getName(), playerState);
+            playerStates.put(p.getName(), pState);
         }
 
         playerStates.put("maxBet", maxbet);
@@ -96,6 +94,8 @@ public class TexasHolday {
         revealCards(1);
         bettingRound();
 
+        createSidePots();
+
         List<Player> winners = sortByComboPower();
 
         System.out.printf("Board : %s\n",
@@ -108,13 +108,19 @@ public class TexasHolday {
             log.info("%s : %s\n".formatted(p.getName(), p.getHand().asList()));
         });
 
+        try {
+            distributeWinnings(winners);
+        } catch (Exception e) {
+            log.log(Level.WARNING, "distributing winnings err", e);
+        }
+
         broadcast(Request.builder()
-                .type("INFO")
+                .type("gameInfo")
                 .winner(winners.get(0).getName())
                 .boardCards(board)
                 .playerStates(getPublicState())
                 .bank(maxbet)
-                // блять а как с сайд потом ебаться пупуп
+                .sidePods(sidePods)
                 .build());
     }
 
@@ -127,34 +133,10 @@ public class TexasHolday {
         }
     }
 
-    private Pair<Action, Integer> requestAction(Player p, Request r) {
-        Action act = Action.CHECK;
-        int bet = 0;
-        p.getSession().getAsyncRemote().sendText(
-                r.toJson(),
-                new SendHandler() {
-
-                    @Override
-                    public void onResult(SendResult result) {
-                        // ret = Action.valueOf(result);
-                        /**
-                         * TODO кароче не ебу
-                         * сюда надо воткнуть хендлер что бы сразу получить ответ
-                         * от игрока.
-                         * 
-                         * как сделать - 0 идей.
-                         */
-                    }
-
-                });
-
-        return new Pair<>(act, bet);
-    }
-
     /**
      * момент уравнивания ставок
      * 
-     * ROƒL если игрок некорректно сделает свои действия - он фолднится xd xd xd xd
+     * ROƒL если игрок некорректно сделает свои действия - он фолднится xd
      *
      */
     private void bettingRound() {
@@ -167,71 +149,42 @@ public class TexasHolday {
             for (Player p : this.players) {
                 if (p.isFolded())
                     continue;
-                if (bets.get(p) != maxbet) {
-                    int amountToCall = maxbet - bets.get(p);
-                    Pair<Action, Integer> actionNdbet = requestAction(p,
-                            Request.builder()
-                                    .type("request")
-                                    .boardCards(board)
-                                    .cards(p.getCards())
-                                    .bank(this.bank)
-                                    .playerStates(getPublicState())
-                                    // .sidePod(0)
-                                    .amount(amountToCall)
-                                    .build());
 
-                    switch (actionNdbet.getFirst()) {
-                        case CALL:
-                            if (p.getCapital() >= amountToCall) {
-                                bets.put(p, maxbet);
-                                p.decreaseCapital(amountToCall);
-                            } else {
-                                p.sendMessage(Request.builder()
-                                        .error("oops no money  (( ( (( u got  folded ")
-                                        .build());
-                                p.fold();
-                            }
-                            break;
-                        case RAISE:
-                            int raiseAmount = actionNdbet.getSecond();
-                            if (p.getCapital() >= raiseAmount + amountToCall) {
-                                maxbet += raiseAmount;
-                                bets.put(p, maxbet);
-                                p.decreaseCapital(amountToCall + raiseAmount);
-                            } else {
-                                p.sendMessage(Request.builder()
-                                        .error("oops no money  (( ( (( u got  folded ")
-                                        .build());
-                                p.fold();
-                            }
-                            break;
-                        case FOLD:
-                            p.fold();
-                            break;
-                        default:
-                            p.sendMessage(Request.builder()
-                                    .error("idk what r u means")
-                                    .build());
-                            p.fold();
+                if (bets.get(p).equals(maxbet))
+                    continue;
+
+                int amountToCall = maxbet - bets.get(p);
+
+                p.setWaitingForAction(true);
+                p.sendMessage(Request.builder()
+                        .type("playerAction")
+                        .action("") // TODO значит что идет запрос действия игрока. к о с т ы л ь
+                        .amount(amountToCall)
+                        .bank(bank)
+                        .boardCards(board)
+                        .cards(p.getCards())
+                        .sidePods(sidePods)
+                        .playerStates(getPublicState())
+                        .build());
+
+                while (p.isWaitingForAction()) {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     }
-
-                    allBetsMatched = bets.keySet().stream().allMatch(new Predicate<Player>() {
-                        @Override
-                        public boolean test(Player t) {
-                            return p.isFolded() && (bets.get(p) == maxbet);
-                        }
-                    });
                 }
 
-                p.sendMessage(Request.builder()
-                        .boardCards(board)
-                        .bank(bank)
-                        .cards(p.getCards())
-                        .playerStates(getPublicState())
-                        .build()
-
-                );
-                // TODO
+                allBetsMatched = bets
+                        .keySet()
+                        .stream()
+                        .allMatch(
+                                new Predicate<Player>() {
+                                    @Override
+                                    public boolean test(Player t) {
+                                        return p.isFolded() && (bets.get(p) == maxbet);
+                                    }
+                                });
             }
         }
     }
@@ -246,7 +199,8 @@ public class TexasHolday {
                     try {
                         return o1.compareTo(o2, board);
                     } catch (Throwable e) {
-                        e.printStackTrace();
+                        log.log(Level.WARNING, "compare combo power", e);
+
                     }
                     return 0;
                 }).collect(Collectors.toList());
@@ -259,61 +213,113 @@ public class TexasHolday {
         this.players.forEach(p -> r.send(p.getSession()));
     }
 
-    public void placeBet(Player player, int betAmount) {
-        if (player.getCapital() >= betAmount) {
-            player.decreaseCapital(betAmount);
-            bets.put(player, betAmount);
+    private void createSidePots() {
+        List<Map.Entry<Player, Integer>> sortedBets = bets.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByValue())
+                .collect(Collectors.toList());
+
+        int accumulatedPot = 0;
+        int previousBet = 0;
+
+        for (int i = 0; i < sortedBets.size(); i++) {
+            Player currentPlayer = sortedBets.get(i).getKey();
+            int currentBet = sortedBets.get(i).getValue();
+
+            if (currentBet > previousBet) {
+                int sidePot = (currentBet - previousBet) * (sortedBets.size() - i);
+                sidePods.put(currentPlayer, sidePods.getOrDefault(currentPlayer, 0) + sidePot);
+                accumulatedPot += sidePot;
+                previousBet = currentBet;
+            }
+        }
+
+        this.bank = accumulatedPot;
+    }
+
+    private void distributeWinnings(List<Player> winners) {
+        Map<Player, Integer> winnings = winners.stream()
+                .collect(Collectors.toMap(player -> player, player -> 0));
+
+        int totalPot = bets.entrySet().stream()
+                .filter(entry -> winners.contains(entry.getKey()))
+                .mapToInt(entry -> {
+                    Player player = entry.getKey();
+                    int playerWinnings = Math.min(entry.getValue(), sidePods.getOrDefault(player, 0));
+                    winnings.merge(player, playerWinnings, Integer::sum);
+                    return playerWinnings;
+                })
+                .sum();
+
+        winnings.forEach((player, amount) -> player.setCapital(player.getCapital() + amount));
+        sidePods.replaceAll((player, value) -> 0);
+        this.bank = totalPot;
+    }
+
+    /**
+     * bet handler
+     */
+    public void betHandler(Player p, int betAmount) {
+        if (p.getCapital() >= betAmount) {
+            p.decreaseCapital(betAmount);
+            bets.put(p, betAmount);
             maxbet = Math.max(maxbet, betAmount);
 
             broadcast(Request.builder()
-                    .type("info")
-                    .name(player.getName())
+                    .type("playerAction")
+                    .name(p.getName())
                     .action(Action.BET.name())
                     .boardCards(board)
                     .bank(this.bank)
                     .playerStates(getPublicState())
                     .build());
         } else {
-            player.sendMessage(Request.builder()
+            p.sendMessage(Request.builder()
                     .type("err")
                     .error("u cant bet pypyp") // TODO
                     .build());
         }
     }
 
-    public void call(Player player) {
-        int amountToCall = maxbet - bets.getOrDefault(player, 0);
-        if (player.getCapital() >= amountToCall) {
-            player.decreaseCapital(amountToCall);
-            bets.put(player, maxbet);
+    /**
+     * call handler
+     */
+    public void callHandler(Player p) {
+        int amountToCall = maxbet - bets.getOrDefault(p, 0);
+        if (p.getCapital() >= amountToCall) {
+            p.decreaseCapital(amountToCall);
+            bets.put(p, maxbet);
 
             broadcast(Request.builder()
-                    .type("info")
-                    .name(player.getName())
+                    .type("playerAction")
+                    .name(p.getName())
                     .action(Action.CALL.name())
                     .boardCards(board)
                     .bank(this.bank)
                     .playerStates(getPublicState())
                     .build());
         } else {
-            player.sendMessage(Request.builder()
+            p.sendMessage(Request.builder()
                     .type("err")
                     .error("u cant bet pypyp") // TODO
                     .build());
-            player.fold();
+            p.fold();
         }
     }
 
-    public void raise(Player player, int raiseAmount) {
-        int amountToCall = maxbet - bets.getOrDefault(player, 0);
-        if (player.getCapital() >= (amountToCall + raiseAmount)) {
-            player.decreaseCapital(amountToCall + raiseAmount);
+    /**
+     * raise handler
+     */
+    public void raiseHandler(Player p, int raiseAmount) {
+        int amountToCall = maxbet - bets.getOrDefault(p, 0);
+        if (p.getCapital() >= (amountToCall + raiseAmount)) {
+            p.decreaseCapital(amountToCall + raiseAmount);
             maxbet += raiseAmount;
-            bets.put(player, maxbet);
+            bets.put(p, maxbet);
 
             broadcast(Request.builder()
-                    .type("info")
-                    .name(player.getName())
+                    .type("playerAction")
+                    .name(p.getName())
                     .action(Action.RAISE.name())
                     .boardCards(board)
                     .bank(this.bank)
@@ -321,61 +327,115 @@ public class TexasHolday {
                     .build());
 
         } else {
-            player.sendMessage(Request.builder()
+            p.sendMessage(Request.builder()
                     .type("err")
                     .error("u cant raise pypyp") // TODO
                     .build());
-            player.fold();
+            p.fold();
         }
     }
 
-    public void fold(Player player) {
+    /**
+     * fold handler
+     */
+    public void foldHandler(Player p) {
         broadcast(Request.builder()
-                .type("info")
-                .name(player.getName())
+                .type("playerAction")
+                .name(p.getName())
                 .action(Action.FOLD.name())
                 .boardCards(board)
                 .bank(this.bank)
                 .playerStates(getPublicState())
                 .build());
-        player.fold();
+        p.fold();
     }
 
-    public void check(Player player) {
-        if (bets.getOrDefault(player, 0) == maxbet) {
+    /**
+     * check handler
+     */
+    public void checkHandler(Player p) {
+        if (bets.getOrDefault(p, 0) == maxbet) {
             broadcast(Request.builder()
-                    .type("info")
-                    .name(player.getName())
+                    .type("playerAction")
+                    .name(p.getName())
                     .action(Action.CHECK.name())
                     .boardCards(board)
                     .bank(this.bank)
                     .playerStates(getPublicState())
                     .build());
         } else {
-            player.sendMessage(Request.builder()
+            p.sendMessage(Request.builder()
                     .type("err")
-                    .error("u cant check pypyp") // TODO
+                    .error("u cant check pykpykp") // TODO
                     .build());
         }
     }
 
-    public void allIn(Player player) {
-        int remainingCapital = player.getCapital();
-        if (player.decreaseCapital(remainingCapital) <= 0)
+    /**
+     * all in handler
+     */
+    public void allInHandler(Player p) {
+        int remainingCapital = p.getCapital();
+        if (p.decreaseCapital(remainingCapital) <= 0)
             return; // фолд чела
 
-        bets.put(player, bets.getOrDefault(player, 0) + remainingCapital);
+        bets.put(p, bets.getOrDefault(p, 0) + remainingCapital);
 
-        maxbet = Math.max(maxbet, bets.get(player));
+        maxbet = Math.max(maxbet, bets.get(p));
         broadcast(Request.builder()
-                .type("info")
-                .name(player.getName())
+                .type("playerAction")
+                .name(p.getName())
                 .action(Action.ALL_IN.name())
                 .boardCards(board)
                 .bank(this.bank)
-                // .sidePod() // TODO блять надо реально че то с ним придумать
+                .sidePods(sidePods)
                 .playerStates(getPublicState())
                 .build());
+    }
+
+    /**
+     * handle player action
+     */
+    public void handleGameAction(Player p, String message) {
+        Response r = new Response(message);
+        if (!r.getType().equals("playerAction"))
+            return;
+
+        try {
+            Map<String, Object> data = r.getData();
+            switch (Action.valueOf((String) data.get("action"))) {
+                case BET:
+                    betHandler(p, (Integer) data.get("amount"));
+                    break;
+                case RAISE:
+                    raiseHandler(p, (Integer) data.get("amount"));
+                    break;
+                case CALL:
+                    callHandler(p);
+                    break;
+                case FOLD:
+                    foldHandler(p);
+                    break;
+                case CHECK:
+                    checkHandler(p);
+                    break;
+                case ALL_IN:
+                    allInHandler(p);
+                    break;
+                default:
+                    p.sendMessage(Request.builder()
+                            .type("err")
+                            .error("Unknown action")
+                            .build());
+                    break;
+            }
+        } catch (Exception e) {
+            log.log(Level.WARNING, "player action handler err", e);
+            p.sendMessage(Request.builder()
+                    .type("err")
+                    .error(e.getMessage())
+                    .build());
+        }
     }
 
 }

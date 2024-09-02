@@ -2,23 +2,26 @@ package ru.noname070.pockerroom.db;
 
 import java.sql.*;
 import java.util.List;
+import java.util.logging.Level;
 
+import lombok.extern.java.Log;
 import ru.noname070.pockerroom.Config;
 
+@Log
 public class DBHandler {
     private static DBHandler instance;
     private Connection connection;
 
     private DBHandler() {
         try {
-            DriverManager.getConnection(
+            connection = DriverManager.getConnection(
                     String.format("jdbc:postgresql://%s:%s/%s", 
                             Config.DB_HOST, 
                             Config.DB_PORT,
                             Config.DB_TABLE),
                     Config.DB_USER, Config.DB_PASSWORD);
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.log(Level.OFF, "db connection err", e);
             System.exit(1);
         }
     }

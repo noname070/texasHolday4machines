@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import javax.websocket.Session;
 
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 
@@ -22,14 +23,24 @@ public class Player {
     private final String name;
     private final String token;
     private final Session session;
-    @Getter private boolean folded = false;
-    private int capital = Config.START_CAPITAL;
+    private boolean folded = false;
+    @Setter private int capital = Config.START_CAPITAL;
     private Hand hand;
+
+    private boolean waitingForAction = false;
 
     public Player(String name, String token, Session session) {
         this.name = name;
         this.token = token;
         this.session = session;
+    }
+
+    public boolean isWaitingForAction() {
+        return waitingForAction;
+    }
+
+    public void setWaitingForAction(boolean waitingForAction) {
+        this.waitingForAction = waitingForAction;
     }
 
     public void reciveCards(Card c1, Card c2) {

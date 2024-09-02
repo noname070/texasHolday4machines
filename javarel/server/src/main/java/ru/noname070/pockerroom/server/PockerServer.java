@@ -3,9 +3,7 @@ package ru.noname070.pockerroom.server;
 import ru.noname070.pockerroom.db.DBHandler;
 import ru.noname070.pockerroom.game.Player;
 import ru.noname070.pockerroom.game.TexasHolday;
-import ru.noname070.pockerroom.game.commons.Action;
 import ru.noname070.pockerroom.server.util.Request;
-import ru.noname070.pockerroom.util.CycleIterator;
 import ru.noname070.pockerroom.util.Pair;
 
 import javax.websocket.*;
@@ -16,6 +14,7 @@ import lombok.extern.java.Log;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.logging.Level;
 
 /**
  * кринжатина ебаная, тут немного сгенерировано говнокода, но в целом норм
@@ -29,7 +28,6 @@ public class PockerServer {
 
     private final Map<String, Player> players = new ConcurrentHashMap<>();
     private final Set<Session> sessions = new CopyOnWriteArraySet<>();
-    private final CycleIterator<Player> playerIterator = new CycleIterator<>(players.values());
     private TexasHolday game;
 
     @OnOpen
@@ -37,14 +35,14 @@ public class PockerServer {
         Pair<String, String> tokenAndName = getTokenAndName(session.getQueryString());
 
         if (tokenAndName != null && isValidToken(tokenAndName.getFirst())) {
-            System.out.println("New connection with valid token: " + session.getId());
+            log.info("New connection with valid token: " + session.getId());
             session.getAsyncRemote().sendText("OK");
             sessions.add(session);
             Player player = new Player(tokenAndName.getSecond(), tokenAndName.getFirst(), session);
             players.put(tokenAndName.getFirst(), player);
 
             if (players.size() >= 2) {
-                startGame();
+                startGame(); // хуйня надо переделать, пока не останется 1 игрок с деньгами
             }
         } else {
             try {
@@ -86,19 +84,21 @@ public class PockerServer {
                 .findFirst()
                 .orElse(null);
 
+        log.log(Level.INFO, "New message from session " + session.getId() + " : " + message);
         if (player != null) {
-            handleGameAction(session, message);
+            game.handleGameAction(player, message);
+            player.setWaitingForAction(false);
         } else {
             session.getAsyncRemote().sendText(Request.builder()
-                    .type("err") // TODO
-                    .error("smthng went wrong")
+                    .type("err")
+                    .error("can`t handle yr response")
                     .build().toJson());
         }
     }
 
     @OnClose
     public void onClose(Session session) {
-        System.out.println("Connection closed: " + session.getId());
+        log.info("Session %s closed".formatted(session.getId()));
         sessions.remove(session);
         players.values().removeIf(p -> {
             if (p.getSession().equals(session)) {
@@ -111,94 +111,7 @@ public class PockerServer {
 
     @OnError
     public void onError(Session session, Throwable throwable) {
-        log.log(null, "Err with session:" + session, throwable);
-    }
-
-    /**
-     * метод должен принимать от игрока одно из enum Action действий и обрабатывать
-     * его.
-     * введи при этом порядок очереди игроков, которые должны совершать свой ход -
-     * он начинается от диллера. можешь использовать util.CycleIterator для учета
-     * ходов.
-     * при этом в конце выполнения действия игроку должно вернуться
-     * InfoMessage(Action.OK/ERR). Если err он должен заного сделать запрос.
-     * всем игрокам должны высылаться обновленное состояние StateMessage с
-     * информацией о ставках и картах на столе;
-     *
-     */
-    private void handleGameAction(Session session, String message) {
-        Player p = players.values().stream()
-                .filter(pl -> pl.getSession().equals(session))
-                .findFirst()
-                .orElse(null);
-
-        if (p == null) {
-            log.log(null, "Err: handled unauthorized player session");
-            session.getAsyncRemote().sendText(Request.builder()
-                    .type("err") // TODO
-                    .error("smthng went wrong")
-                    .build().toJson());
-            return;
-        }
-
-        String[] parts = message.split(" ");
-        Action action;
-        try {
-            action = Action.valueOf(parts[0].toUpperCase());
-        } catch (IllegalArgumentException e) {
-            log.log(null, "Err: ", e);
-            session.getAsyncRemote().sendText(Request.builder()
-                    .type("err") // TODO
-                    .error("smthng went wrong")
-                    .build().toJson());
-            return;
-        }
-
-        switch (action) {
-            case BET: {
-                int amount = 0;
-                try {
-                    amount = Integer.parseInt(parts[1]);
-                } catch (NumberFormatException e) {
-                    log.log(null, "Err: ", e);
-                    session.getAsyncRemote().sendText(Request.builder()
-                            .type("err") // TODO
-                            .error("smthng went wrong")
-                            .build().toJson());
-                    return;
-                }
-                game.placeBet(p, amount);
-            }
-            case CALL:
-                game.call(p);
-            case RAISE: {
-                int amount = 0;
-                try {
-                    amount = Integer.parseInt(parts[1]);
-                } catch (NumberFormatException e) {
-                    log.log(null, "Err: ", e);
-                    session.getAsyncRemote().sendText(Request.builder()
-                            .type("err") // TODO
-                            .error("smthng went wrong")
-                            .build().toJson());
-                    return;
-                }
-                game.raise(p, amount);
-            }
-            case FOLD: {
-                game.fold(p);
-            }
-            case CHECK: {
-                game.check(p);
-            }
-            case ALL_IN: {
-                game.allIn(p);
-            }
-            default:
-                break;
-        }
-        Player nextPlayer = playerIterator.next();
-
+        log.log(Level.WARNING, "Err with session:" + session, throwable);
     }
 
     private void startGame() {
@@ -209,6 +122,7 @@ public class PockerServer {
                 .action("GAME_START")
                 .build());
 
+        log.info("Game started");
         game.newGame();
     }
 }

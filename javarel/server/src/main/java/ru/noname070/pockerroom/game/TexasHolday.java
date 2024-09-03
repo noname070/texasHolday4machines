@@ -88,7 +88,7 @@ public class TexasHolday {
         for (Player p : this.players) {
             p.reciveCards(deck.next(), deck.next());
             p.sendMessage(Request.builder()
-                    .type("INFO")
+                    .type("gameInfo")
                     .cards(p.getCards())
                     .build());
         }
@@ -164,10 +164,7 @@ public class TexasHolday {
         boolean allBetsMatched = false;
         while (!allBetsMatched) {
             for (Player p : this.players) {
-                if (p.isFolded())
-                    continue;
-
-                if (bets.get(p).equals(maxbet))
+                if (p.isFolded() || bets.get(p).equals(maxbet))
                     continue;
 
                 int amountToCall = maxbet - bets.get(p);
@@ -216,10 +213,9 @@ public class TexasHolday {
                     try {
                         return o1.compareTo(o2, board);
                     } catch (Throwable e) {
-                        log.log(Level.WARNING, "compare combo power", e);
-
+                        log.log(Level.WARNING, "compare combo power err", e);
+                        return 0;
                     }
-                    return 0;
                 }).collect(Collectors.toList());
     }
 

@@ -7,16 +7,24 @@ import ru.noname070.pockerroom.server.util.Request;
 import ru.noname070.pockerroom.util.CycleIterator;
 import ru.noname070.pockerroom.util.Pair;
 
-import javax.websocket.*;
+import javax.websocket.Session;
+import javax.websocket.OnClose;
+import javax.websocket.OnError;
+import javax.websocket.OnMessage;
+import javax.websocket.OnOpen;
 import javax.websocket.server.ServerEndpoint;
 
 import lombok.Getter;
 import lombok.extern.java.Log;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
+import java.util.Iterator;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 /**
  * кринжатина ебаная, тут немного сгенерировано говнокода, но в целом норм
@@ -40,7 +48,10 @@ public class PockerServer {
 
         if (tokenAndName != null && isValidToken(tokenAndName.getFirst())) {
             log.info("New connection with valid token: " + session.getId());
-            session.getAsyncRemote().sendText("OK");
+            session.getAsyncRemote().sendText(Request.builder()
+                    .type("authOK")
+                    .build()
+                    .toJson());
             sessions.add(session);
             Player player = new Player(tokenAndName.getSecond(), tokenAndName.getFirst(), session);
             players.put(tokenAndName.getFirst(), player);
@@ -50,7 +61,11 @@ public class PockerServer {
 
         } else {
             try {
-                session.getAsyncRemote().sendText("ERROR: token incorrect");
+                session.getAsyncRemote().sendText(Request
+                        .builder()
+                        .type("authERR")
+                        .error("incorrect token")
+                        .build().toJson());
                 session.close();
                 System.out.println("Connection closed due to invalid token: " + session.getId());
             } catch (Exception e) {
@@ -59,22 +74,19 @@ public class PockerServer {
         }
     }
 
-    private Pair<String, String> getTokenAndName(String queryString) {
-        String token = "";
-        String name = "";
-        if (queryString != null) {
-            for (String param : queryString.split("&")) {
-                String[] keyValue = param.split("=");
-                if (keyValue.length == 2) {
-                    if (keyValue[0].equals("token")) {
-                        token = keyValue[1];
-                    } else if (keyValue[0].equals("name")) {
-                        name = keyValue[1];
-                    }
-                }
-            }
-        }
+    private Pair<String, String> getTokenAndName(String qString) {
+        if (qString == null)
+            return null;
+        Map<String, String> qParams = Arrays.stream(qString.split("&"))
+                .map(p -> p.split("="))
+                .filter(kv -> kv.length == 2)
+                .collect(Collectors.toMap(kv -> kv[0], kv -> kv[1]));
+
+        String token = qParams.get("token");
+        String name = qParams.get("name");
+
         return (!token.isEmpty() && !name.isEmpty()) ? new Pair<>(token, name) : null;
+
     }
 
     private boolean isValidToken(String token) {
@@ -88,7 +100,7 @@ public class PockerServer {
                 .findFirst()
                 .orElse(null);
 
-        log.log(Level.INFO, "New message from session " + session.getId() + " : " + message);
+        log.log(Level.INFO, "New message from session %s : ".formatted(session.getId(), message));
         if (player != null) {
             game.handleGameAction(player, message);
             player.setWaitingForAction(false);
@@ -120,13 +132,13 @@ public class PockerServer {
 
     public void initGame() {
         game = new TexasHolday(
-            playerIter,
-            players.values().toArray(new Player[0]));
+                playerIter,
+                players.values().toArray(new Player[0]));
     }
 
     public void startGame() {
         game.broadcast(Request.builder()
-                .type("action")
+                .type("gameInfo")
                 .action("GAME_START")
                 .build());
 

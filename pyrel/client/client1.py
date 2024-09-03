@@ -1,7 +1,32 @@
 import json
 import asyncio
+from typing import Self, Type
 import websockets
+from enum import Enum
 
+Action = Enum("Action", ["BET", "CALL", "CHECK", "FOLD", "RAISE", "SIDEPOT", "ALL_IN"])
+Combo = Enum("Combo", ["HIGHEST_CARD", "PAIR", "TWO_PAIR", "THREE", "STRAIGHT", "FLUSH", "FULL_HOUSE", "FOUR", "STRAIGHT_FLUSH", "ROYAL_FLUSH"])
+Rank = Enum("Rank", ["TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "JACK", "QUEEN", "KING", "ACE"])
+Suit = Enum("Suit", ["HEART", "DIAMOND", "CLUB", "SPADE"])
+
+class Card():
+    def __init__(self, rank: Rank, suit: Suit) -> None:
+        self.rank = rank
+        self.suit = suit
+        
+    def compare(self, o: Type[Self]) -> int:
+        if self.rank.value > o.rank.value:
+            return 1
+        elif self.rank.value < o.rank.value:
+            return -1
+        return 0
+
+    def __str__(self) -> str:
+        return f"{self.rank} {self.suit}"
+    
+    def __eq__(self, o: Type[Self]) -> bool:
+        return self.rank.value == o.rank.value & self.suit.value == o.suit.value
+    
 class PokerClient:
     def __init__(self, base_url, name, token):
         self.base_url = base_url
@@ -15,8 +40,7 @@ class PokerClient:
         self.session = await websockets.connect(uri)
         print("Connected and authenticated")
 
-        response = await self.session.recv()
-        if response != "OK":
+        if await self.session.recv() != "OK":
             print("Failed to authenticate")
             self.session = None
             return False
@@ -25,17 +49,15 @@ class PokerClient:
     async def send_message(self, message):
         if self.session:
             await self.session.send(message)
-            print(f"Sent: {message}")
 
     async def handle_message(self, message):
         try:
             data = json.loads(message)
-            msg_type = data.get("type")
-            handler = self.handlers.get(msg_type)
+            handler = self.handlers.get(data.get("type"))
             if handler:
                 await handler(data)
             else:
-                print(f"No handler for message type: {msg_type}")
+                print(f"No handler for message type: {data.get('type')}")
         except json.JSONDecodeError:
             print("Error decoding JSON")
 

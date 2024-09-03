@@ -18,7 +18,8 @@ public class TexasHolday {
 
     private final List<Player> players;
     private final Iterator<Player> dealers;
-    @Getter private final List<Card> board;
+    @Getter
+    private final List<Card> board;
     private Map<Player, Integer> bets;
     private Map<Player, Integer> sidePods = new HashMap<>();
     private Iterator<Card> deck;
@@ -27,9 +28,9 @@ public class TexasHolday {
 
     // private final Gson gson = new GsonBuilder().create();
 
-    public TexasHolday(Player... players) {
+    public TexasHolday(Iterator<Player> dealers, Player... players) {
         this.players = Arrays.asList(players);
-        this.dealers = new CycleIterator<>(players);
+        this.dealers = dealers;
         this.board = new ArrayList<>();
     }
 
@@ -55,6 +56,33 @@ public class TexasHolday {
     }
 
     public void newGame() {
+        Player dealer = dealers.next();
+        bets = new HashMap<>() {
+            {
+                int dealerIndex = (players.indexOf(dealer));
+                put(dealer, 0);
+
+                /**
+                 * вот эта вся блядистика нужна на всякий случай что бы на блайндах бабки у
+                 * игроков не ушли в минус
+                 * 
+                 * если на блайндах игроки не могут поставить ставки - они улетают.
+                 */
+                Player pSmallBlind = players.get(dealerIndex + 1 % players.size());
+                if (pSmallBlind.getCapital() > Config.SMALL_BLIND) {
+                    put(pSmallBlind, pSmallBlind.bet(Config.SMALL_BLIND).getFirst());
+                } else
+                    players.remove(pSmallBlind);
+
+                Player pBigBlind = players.get(dealerIndex + 2 % players.size());
+                if (pBigBlind.getCapital() > Config.SMALL_BLIND * 2) {
+                    put(pBigBlind, pBigBlind.bet(Config.SMALL_BLIND * 2).getFirst());
+                } else
+                    players.remove(pBigBlind);
+
+            }
+        };
+
         this.deck = Card.newDeck().iterator();
 
         for (Player p : this.players) {
@@ -65,22 +93,11 @@ public class TexasHolday {
                     .build());
         }
 
-        Player dealer = dealers.next();
-        bets = new HashMap<>() {
-            {
-                put(dealer, 0);
-                put(players.get((players.indexOf(dealer) + 1) % players.size()), Config.SMALL_BLIND);
-                put(players.get((players.indexOf(dealer) + 2) % players.size()), Config.SMALL_BLIND * 2);
-            }
-        };
-
         playRound();
     }
 
     /**
-     * метод реализует непосредственно игру.
-     * по окончанию игры всем игрокам отправить сообщение кто победил и с какими
-     * картами.
+     * играем одну партейку
      */
     private void playRound() {
         bettingRound();
@@ -213,6 +230,9 @@ public class TexasHolday {
         this.players.forEach(p -> r.send(p.getSession()));
     }
 
+    /**
+     * высчитываем блядские сайдподы игрокам
+     */
     private void createSidePots() {
         List<Map.Entry<Player, Integer>> sortedBets = bets.entrySet()
                 .stream()
@@ -237,6 +257,9 @@ public class TexasHolday {
         this.bank = accumulatedPot;
     }
 
+    /**
+     * раскидываем выигрыш игрокам
+     */
     private void distributeWinnings(List<Player> winners) {
         Map<Player, Integer> winnings = winners.stream()
                 .collect(Collectors.toMap(player -> player, player -> 0));
@@ -376,8 +399,10 @@ public class TexasHolday {
      */
     public void allInHandler(Player p) {
         int remainingCapital = p.getCapital();
-        if (p.decreaseCapital(remainingCapital) <= 0)
-            return; // фолд чела
+        if (p.decreaseCapital(remainingCapital) <= 0) {
+            p.fold();
+            return;
+        }
 
         bets.put(p, bets.getOrDefault(p, 0) + remainingCapital);
 

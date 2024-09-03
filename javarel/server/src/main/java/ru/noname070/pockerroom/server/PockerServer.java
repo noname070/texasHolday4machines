@@ -4,11 +4,13 @@ import ru.noname070.pockerroom.db.DBHandler;
 import ru.noname070.pockerroom.game.Player;
 import ru.noname070.pockerroom.game.TexasHolday;
 import ru.noname070.pockerroom.server.util.Request;
+import ru.noname070.pockerroom.util.CycleIterator;
 import ru.noname070.pockerroom.util.Pair;
 
 import javax.websocket.*;
 import javax.websocket.server.ServerEndpoint;
 
+import lombok.Getter;
 import lombok.extern.java.Log;
 
 import java.util.*;
@@ -26,7 +28,9 @@ import java.util.logging.Level;
 @ServerEndpoint("/game")
 public class PockerServer {
 
+    @Getter
     private final Map<String, Player> players = new ConcurrentHashMap<>();
+    private Iterator<Player> playerIter;
     private final Set<Session> sessions = new CopyOnWriteArraySet<>();
     private TexasHolday game;
 
@@ -41,9 +45,9 @@ public class PockerServer {
             Player player = new Player(tokenAndName.getSecond(), tokenAndName.getFirst(), session);
             players.put(tokenAndName.getFirst(), player);
 
-            if (players.size() >= 2) {
-                startGame(); // хуйня надо переделать, пока не останется 1 игрок с деньгами
-            }
+            // костыль но похуй
+            playerIter = new CycleIterator<>(players.values());
+
         } else {
             try {
                 session.getAsyncRemote().sendText("ERROR: token incorrect");
@@ -114,9 +118,13 @@ public class PockerServer {
         log.log(Level.WARNING, "Err with session:" + session, throwable);
     }
 
-    private void startGame() {
-        game = new TexasHolday(players.values().toArray(new Player[0]));
+    public void initGame() {
+        game = new TexasHolday(
+            playerIter,
+            players.values().toArray(new Player[0]));
+    }
 
+    public void startGame() {
         game.broadcast(Request.builder()
                 .type("action")
                 .action("GAME_START")

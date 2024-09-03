@@ -2,7 +2,7 @@ package ru.noname070.pockerroom.game.commons;
 
 public enum Suit {
     HEART,  // ♥
-    DIAMON, // ♦
+    DIAMOND, // ♦
     CLUB,   // ♣
     SPADE   // ♠
 }

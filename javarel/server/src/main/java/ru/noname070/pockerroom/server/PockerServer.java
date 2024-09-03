@@ -1,5 +1,6 @@
 package ru.noname070.pockerroom.server;
 
+import ru.noname070.pockerroom.Config;
 import ru.noname070.pockerroom.db.DBHandler;
 import ru.noname070.pockerroom.game.Player;
 import ru.noname070.pockerroom.game.TexasHolday;
@@ -14,7 +15,6 @@ import javax.websocket.OnMessage;
 import javax.websocket.OnOpen;
 import javax.websocket.server.ServerEndpoint;
 
-import lombok.Getter;
 import lombok.extern.java.Log;
 
 import java.util.Map;
@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 @ServerEndpoint("/game")
 public class PockerServer {
 
-    @Getter
     private final Map<String, Player> players = new ConcurrentHashMap<>();
     private Iterator<Player> playerIter;
     private final Set<Session> sessions = new CopyOnWriteArraySet<>();
@@ -56,8 +55,12 @@ public class PockerServer {
             Player player = new Player(tokenAndName.getSecond(), tokenAndName.getFirst(), session);
             players.put(tokenAndName.getFirst(), player);
 
-            // костыль но похуй
-            playerIter = new CycleIterator<>(players.values());
+            {
+                if (players.size() == Config.NUM_PLAYERS) {
+                    playerIter = new CycleIterator<>(players.values());
+                    initGame();
+                }
+            }
 
         } else {
             try {
@@ -67,9 +70,9 @@ public class PockerServer {
                         .error("incorrect token")
                         .build().toJson());
                 session.close();
-                System.out.println("Connection closed due to invalid token: " + session.getId());
+                log.log(Level.INFO, "Connection closed due to invalid token %s", session.getId());
             } catch (Exception e) {
-                e.printStackTrace();
+                log.log(Level.WARNING, "", e);
             }
         }
     }

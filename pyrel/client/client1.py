@@ -84,6 +84,10 @@ async def main():
     async def player_action_handler(data):
         action = data.get("action")
         amount = data.get("amount")
+        
+        if action == "": # сервер справшивает с клиента его действие
+            pass # TODO
+        
         action_messages = {
             "BET": f"Bet with amount {amount}",
             "CALL": "Call",

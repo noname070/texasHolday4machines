@@ -103,6 +103,15 @@ async def main():
         side_pods = data.get("sidePods")
         print(f"Game Info:\nWinner: {winner}\nBoard Cards: {board_cards}\nPlayer States: {player_states}\nBank: {bank}\nSide Pods: {side_pods}")
 
+    @client.register_handler(type="err")
+    async def err_handler(data):
+        print("err", data)
+        
+    @client.register_handler(type="authERR")
+    @client.register_handler(type="authOK")
+    async def auth_info(data):
+        print("auth :", data)
+    
     await client.run()
 
 

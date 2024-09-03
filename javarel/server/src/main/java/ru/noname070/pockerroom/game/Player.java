@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import javax.websocket.Session;
@@ -17,7 +19,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter
-
 public class Player {
     // private static final Gson gson = new GsonBuilder().create();
     private final String name;
@@ -28,6 +29,8 @@ public class Player {
     private Hand hand;
 
     private boolean waitingForAction = false;
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Condition actionReceived = lock.newCondition();
 
     public Player(String name, String token, Session session) {
         this.name = name;
@@ -40,7 +43,23 @@ public class Player {
     }
 
     public void setWaitingForAction(boolean waitingForAction) {
+        lock.lock();
         this.waitingForAction = waitingForAction;
+        if (!waitingForAction) {
+            actionReceived.signalAll();
+            lock.unlock();
+        }
+    }
+
+    public void awaitAction() throws InterruptedException {
+        lock.lock();
+        try {
+            do {
+                actionReceived.await();
+            } while (waitingForAction);
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void reciveCards(Card c1, Card c2) {

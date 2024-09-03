@@ -15,20 +15,15 @@ public class Response {
             .disableHtmlEscaping()
             .create();
 
-
     @Getter private final String type;
     @Getter private final Map<String, Object> data;
 
-    @SuppressWarnings("unchecked")
     public Response(String raw) {
         Map<String, Object> r = get(raw);
         this.type = (String) r.getOrDefault("type", "err");
         this.data = (Map<String, Object>) r.getOrDefault("data", null);
     }
 
-    // TODO какую нибудь штуку красивую что бы распаковывала все ключи
-    // пупупупупупупупуу
-    @SuppressWarnings("unchecked")
     public static Map<String, Object> get(String raw) {
         return gson.fromJson(raw, HashMap.class);
     }

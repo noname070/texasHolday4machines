@@ -39,7 +39,7 @@ public class DBHandler {
                 return rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.log(Level.WARNING, "db token checker exception", e);
         }
         return false;
     }
@@ -70,17 +70,18 @@ public class DBHandler {
 
             connection.commit();
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.log(Level.WARNING, "db exception", e);
             try {
                 connection.rollback();
             } catch (SQLException rollbackException) {
-                rollbackException.printStackTrace();
+                log.log(Level.WARNING, "db can`t rollback", e);
+
             }
         } finally {
             try {
                 connection.setAutoCommit(true);
             } catch (SQLException e) {
-                e.printStackTrace();
+                log.log(Level.WARNING, "db can`t set autoCommit=true", e);
             }
         }
     }

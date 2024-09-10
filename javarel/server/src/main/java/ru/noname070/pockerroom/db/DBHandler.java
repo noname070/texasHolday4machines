@@ -44,7 +44,6 @@ public class DBHandler {
         return false;
     }
 
-    // TODO
     public void updateAfterGame(int gameId, int winnerId, int potSize, List<UserAction> actions) {
         try {
             connection.setAutoCommit(false);

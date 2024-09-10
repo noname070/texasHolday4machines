@@ -156,6 +156,17 @@ public class TexasHolday {
      * ROƒL если игрок некорректно сделает свои действия - он фолднится xd
      *
      */
+    private final Predicate<Player> isPlayerNeedBetting = new Predicate<Player>() {
+        /**
+         * @return выкинул карты или уровнял до максимумуа -> †rue
+         * @retrurn иначе-> ƒalse
+         */
+        @Override
+        public boolean test(Player p) {
+            return p.isFolded() && (bets.get(p) == maxbet);
+        }
+    };
+
     private void bettingRound() {
         bets.forEach((Player p, Integer n) -> {
             maxbet = Math.max(n, maxbet);
@@ -164,16 +175,14 @@ public class TexasHolday {
         boolean allBetsMatched = false;
         while (!allBetsMatched) {
             for (Player p : this.players) {
-                if (p.isFolded() || bets.get(p).equals(maxbet))
+                if (isPlayerNeedBetting.test(p))
                     continue;
-
-                int amountToCall = maxbet - bets.get(p);
 
                 p.setWaitingForAction(true);
                 p.sendMessage(Request.builder()
                         .type("playerAction")
                         .action("") // TODO значит что идет запрос действия игрока. к о с т ы л ь
-                        .amount(amountToCall)
+                        .amount(maxbet - bets.get(p)) // amount
                         .bank(bank)
                         .boardCards(board)
                         .cards(p.getCards())
@@ -192,13 +201,7 @@ public class TexasHolday {
                 allBetsMatched = bets
                         .keySet()
                         .stream()
-                        .allMatch(
-                                new Predicate<Player>() {
-                                    @Override
-                                    public boolean test(Player t) {
-                                        return p.isFolded() && (bets.get(p) == maxbet);
-                                    }
-                                });
+                        .allMatch(isPlayerNeedBetting);
             }
         }
     }

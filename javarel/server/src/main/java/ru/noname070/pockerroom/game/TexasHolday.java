@@ -296,7 +296,7 @@ public class TexasHolday {
         } else {
             p.sendMessage(Request.builder()
                     .type("err")
-                    .error("u cant bet pypyp") // TODO
+                    .error("insufficient funds to place bet")
                     .build());
         }
     }
@@ -321,7 +321,7 @@ public class TexasHolday {
         } else {
             p.sendMessage(Request.builder()
                     .type("err")
-                    .error("u cant bet pypyp") // TODO
+                    .error("insufficient funds to place call")
                     .build());
             p.fold();
         }
@@ -349,7 +349,7 @@ public class TexasHolday {
         } else {
             p.sendMessage(Request.builder()
                     .type("err")
-                    .error("u cant raise pypyp") // TODO
+                    .error("insufficient funds to place raise")
                     .build());
             p.fold();
         }
@@ -386,7 +386,7 @@ public class TexasHolday {
         } else {
             p.sendMessage(Request.builder()
                     .type("err")
-                    .error("u cant check pykpykp") // TODO
+                    .error("uou cannot check, please match the current bet")
                     .build());
         }
     }
@@ -447,7 +447,7 @@ public class TexasHolday {
                 default:
                     p.sendMessage(Request.builder()
                             .type("err")
-                            .error("Unknown action")
+                            .error("unknown action")
                             .build());
                     break;
             }

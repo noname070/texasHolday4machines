@@ -40,15 +40,13 @@ public class TexasHolday {
 
     public Map<String, Object> getPublicState() {
 
-        Map<String, Object> playerStates = new HashMap<>();
-        for (Player p : players) {
-            Map<String, Object> pState = new HashMap<>();
-            pState.put("currentBet", bets.getOrDefault(p, 0));
-            pState.put("remainingCapital", p.getCapital());
-            pState.put("isFolded", p.isFolded());
-
-            playerStates.put(p.getName(), pState);
-        }
+        Map<String, Object> playerStates = players.stream()
+                .collect(Collectors.toMap(
+                        Player::getName,
+                        p -> Map.of(
+                                "currentBet", bets.getOrDefault(p, 0),
+                                "remainingCapital", p.getCapital(),
+                                "isFolded", p.isFolded())));
 
         playerStates.put("maxBet", maxbet);
 

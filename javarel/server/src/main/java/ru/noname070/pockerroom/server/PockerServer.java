@@ -105,22 +105,22 @@ public class PockerServer {
                 stopGame();
 
             default: {
-        Player player = players.values().stream()
-                .filter(p -> p.getSession().equals(session))
-                .findFirst()
-                .orElse(null);
+                Player player = players.values().stream()
+                        .filter(p -> p.getSession().equals(session))
+                        .findFirst()
+                        .orElse(null);
 
-        log.log(Level.INFO, "New message from session %s : ".formatted(session.getId(), message));
-        if (player != null) {
-            game.handleGameAction(player, message);
-            player.setWaitingForAction(false);
-        } else {
-            session.getAsyncRemote().sendText(Request.builder()
-                    .type("err")
-                    .error("can`t handle yr response")
-                    .build().toJson());
-        }
-    }
+                log.log(Level.INFO, "New message from session %s : ".formatted(session.getId(), message));
+                if (player != null) {
+                    game.handleGameAction(player, message);
+                    player.setWaitingForAction(false);
+                } else {
+                    session.getAsyncRemote().sendText(Request.builder()
+                            .type("err")
+                            .error("can`t handle yr response")
+                            .build().toJson());
+                }
+            }
                 break;
         }
 

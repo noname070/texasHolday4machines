@@ -1,6 +1,7 @@
 package ru.noname070.pockerroom;
 
-import java.util.Scanner;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.logging.Level;
 
 import org.glassfish.tyrus.server.Server;
@@ -20,11 +21,10 @@ public class Main {
             server.start();
             System.out.println("WebSocket server started at ws://localhost:8080/game");
 
-            try (Scanner scanner = new Scanner(System.in);) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
                 while (true) {
-                    if (scanner.hasNextLine()) {
-                        if (scanner.nextLine().equals("q")) break;
-                    }
+                    if ((line = reader.readLine()) != null && line.equals("q")) break; 
                 }
             }
         } catch (Exception e) {

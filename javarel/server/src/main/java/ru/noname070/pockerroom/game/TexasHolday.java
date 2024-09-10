@@ -159,7 +159,7 @@ public class TexasHolday {
     private final Predicate<Player> isPlayerNeedBetting = new Predicate<Player>() {
         /**
          * @return выкинул карты или уровнял до максимумуа -> †rue
-         * @retrurn иначе-> ƒalse
+         * @retrurn иначе -> ƒalse
          */
         @Override
         public boolean test(Player p) {

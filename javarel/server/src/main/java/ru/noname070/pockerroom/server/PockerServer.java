@@ -98,6 +98,13 @@ public class PockerServer {
 
     @OnMessage
     public void onMessage(Session session, String message) {
+        switch (message) {
+            case "start":
+                startGame();
+            case "stop":
+                stopGame();
+
+            default: {
         Player player = players.values().stream()
                 .filter(p -> p.getSession().equals(session))
                 .findFirst()
@@ -113,6 +120,10 @@ public class PockerServer {
                     .error("can`t handle yr response")
                     .build().toJson());
         }
+    }
+                break;
+        }
+
     }
 
     @OnClose
@@ -139,7 +150,16 @@ public class PockerServer {
                 players.values().toArray(new Player[0]));
     }
 
-    public void startGame() {
+    private void stopGame() {
+        game.broadcast(Request.builder()
+                .type("gameInfo")
+                .action("GAME_STOP")
+                .build());
+        log.info("Game stoped");
+        game = null; // TODO возможно надо будет че нибудь внести в табличку и только потом удалять
+    }
+
+    private void startGame() {
         game.broadcast(Request.builder()
                 .type("gameInfo")
                 .action("GAME_START")

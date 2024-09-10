@@ -53,6 +53,15 @@ public class TexasHolday {
         return playerStates;
     }
 
+    /**
+     * @deprecated
+     *             возможно тут будет логика для завершения полной игры и вносить
+     *             всю инфу в бд
+     */
+    public void stopGame() {
+        // TODO
+    }
+
     public void newGame() {
         Player dealer = dealers.next();
         bets = new HashMap<>() {
